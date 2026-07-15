@@ -7,14 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* Memastikan tinggi halaman pas dengan layar HP */
-        html, body {
-            height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-        }
-        /* Custom scrollbar bergaya minimalis */
+        html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
@@ -29,7 +22,7 @@
             </div>
             <div>
                 <h1 class="font-bold text-sm">Grup Workshop Moogy</h1>
-                <p class="text-[10px] text-emerald-200">Online | Komunikasi Karyawan</p>
+                <p class="text-[10px] text-emerald-200">Online | Fitur Gambar Sukses</p>
             </div>
         </div>
         <button onclick="changeUsername()" class="text-[11px] bg-emerald-700 hover:bg-emerald-800 px-2.5 py-1.5 rounded-lg transition">
@@ -40,20 +33,31 @@
     <main id="chat-box" class="flex-1 p-4 overflow-y-auto space-y-4 bg-[#efeae2] relative" style="background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; background-color: #efeae2;">
         </main>
 
-    <footer class="bg-[#f0f2f5] p-3 flex items-center space-x-2 border-t border-gray-300 shrink-0 pb-safe">
-        <input type="text" id="message-input" placeholder="Ketik pesan..." 
-            class="flex-1 px-4 py-2.5 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#075e54] text-sm"
-            onkeypress="handleKeyPress(event)" autocomplete="off">
-        <button onclick="sendMessage()" class="bg-[#00a884] hover:bg-[#008f72] text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md shrink-0">
-            <i class="fas fa-paper-plane text-sm"></i>
-        </button>
+    <footer class="bg-[#f0f2f5] p-3 flex flex-col border-t border-gray-300 shrink-0 pb-safe">
+        <div class="flex items-center space-x-2">
+            <label class="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-600 w-10 h-10 rounded-full flex items-center justify-center transition shrink-0 shadow-sm">
+                <i class="fas fa-camera text-lg"></i>
+                <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleFileUpload(this)">
+            </label>
+            
+            <input type="text" id="message-input" placeholder="Ketik pesan atau tempel link video (mp4)..." 
+                class="flex-1 px-4 py-2.5 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#075e54] text-sm"
+                onkeypress="handleKeyPress(event)" autocomplete="off">
+            
+            <button onclick="sendMessage()" class="bg-[#00a884] hover:bg-[#008f72] text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md shrink-0">
+                <i class="fas fa-paper-plane text-sm"></i>
+            </button>
+        </div>
+        <div id="upload-status" class="text-xs text-emerald-700 font-medium mt-1 hidden px-12">
+            <i class="fas fa-spinner fa-spin mr-1"></i> Memproses gambar...
+        </div>
     </footer>
 
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
     <script>
-        // 1. KONFIGURASI FIREBASE (Tetap menggunakan proyek moogy-chat Anda)
+        // 1. KONFIGURASI FIREBASE MOOGY-CHAT
         const firebaseConfig = {
             apiKey: "AIzaSyCUkSzb_HssqSZKLZR4FcgGwHMB2CfZOSg",
             authDomain: "moogy-chat.firebaseapp.com",
@@ -65,7 +69,6 @@
             measurementId: "G-XTFKF627B0"
         };
 
-        // Inisialisasi Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const chatRef = database.ref('group_chats'); 
@@ -91,36 +94,77 @@
             return text.replace(/[&<>"']/g, function(m) { return map[m]; });
         }
 
-        // 3. LOGIKA KIRIM PESAN
-        function sendMessage() {
+        // Cek tipe file dari teks input
+        function checkMediaType(url) {
+            if (url.startsWith('data:image/') || url.substring(0, 10).match(/^[A-Za-z0-9+/=]+$/)) return 'image';
+            const cleanUrl = url.toLowerCase().split('?')[0];
+            if (cleanUrl.match(/\.(jpeg|jpg|gif|png|webp)$/)) return 'image';
+            if (cleanUrl.match(/\.(mp4|webm|ogg|mov)$/)) return 'video';
+            return 'text';
+        }
+
+        function sendMessage(customData = null) {
             const input = document.getElementById('message-input');
-            const messageText = input.value.trim();
+            let messageData = customData;
 
-            if (messageText === "") return;
+            if (!messageData) {
+                const messageText = input.value.trim();
+                if (messageText === "") return;
+                const detectedType = checkMediaType(messageText);
+                messageData = { sender: currentUser, message: messageText, type: detectedType, timestamp: Date.now() };
+            }
 
-            const messageData = {
-                sender: currentUser,
-                message: messageText,
-                timestamp: Date.now()
-            };
+            chatRef.push(messageData).then(() => {
+                input.value = ""; 
+                input.focus();
+            });
+        }
 
-            chatRef.push(messageData)
-                .then(() => {
-                    input.value = ""; 
-                    input.focus();
-                })
-                .catch((error) => {
-                    console.error("Gagal mengirim pesan: ", error);
-                });
+        // 4. LOGIKA UPLOAD GAMBAR DENGAN FUNGSI MENCARI BASE64 YANG LEBIH PRESISI
+        function handleFileUpload(element) {
+            const file = element.files[0];
+            if (!file) return;
+
+            const statusDiv = document.getElementById('upload-status');
+            statusDiv.classList.remove('hidden');
+
+            if (file.type.startsWith('image/')) {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Kompresi resolusi maksimal lebar 500px agar memuat database lebih ringan
+                    const maxW = 500;
+                    const scale = maxW / img.width;
+                    canvas.width = img.width > maxW ? maxW : img.width;
+                    canvas.height = img.width > maxW ? (img.height * scale) : img.height;
+                    
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', 0.6); // Kualitas 60% agar irit ruang
+                    
+                    statusDiv.classList.add('hidden');
+                    const mediaData = {
+                        sender: currentUser,
+                        message: compressedBase64,
+                        type: 'image',
+                        timestamp: Date.now()
+                    };
+                    sendMessage(mediaData);
+                };
+            } else {
+                statusDiv.classList.add('hidden');
+                alert("Format berkas tidak didukung. Silakan masukkan gambar.");
+            }
+            element.value = "";
         }
 
         function handleKeyPress(event) {
-            if (event.key === 'Enter') {
-                sendMessage();
-            }
+            if (event.key === 'Enter') sendMessage();
         }
 
-        // 4. SINKRONISASI PESAN SECARA REAL-TIME
+        // 5. SINKRONISASI PESAN & FIX DETEKSI TYPE GAMBAR
         chatRef.on('value', (snapshot) => {
             const chatBox = document.getElementById('chat-box');
             chatBox.innerHTML = ''; 
@@ -132,14 +176,42 @@
                     const isMe = chat.sender === currentUser;
                     const time = new Date(chat.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                     
-                    const safeMessage = escapeHTML(chat.message);
                     const safeSender = escapeHTML(chat.sender);
+                    
+                    // DETEKSI ULANG TIPE DATA SAAT TAMPIL (Pencegahan jika parameter type gagal dikirim)
+                    let type = chat.type || 'text';
+                    if (chat.message.startsWith('data:image/') || chat.message.length > 200) {
+                        type = 'image';
+                    }
+
+                    let contentRender = '';
+                    
+                    if (type === 'image') {
+                        contentRender = `
+                            <div class="my-1 max-w-full rounded bg-gray-100 overflow-hidden border border-gray-200">
+                                <img src="${chat.message}" alt="Image" class="max-h-60 w-full object-cover cursor-pointer" onclick="window.open('${chat.message}', '_blank')">
+                            </div>
+                        `;
+                    } 
+                    else if (type === 'video') {
+                        contentRender = `
+                            <div class="my-1 max-w-full rounded overflow-hidden border border-gray-200 bg-black">
+                                <video controls class="max-h-60 w-full">
+                                    <source src="${chat.message}" type="video/mp4">
+                                    Browser tidak mendukung preview video.
+                                </video>
+                            </div>
+                        `;
+                    } else {
+                        const safeMessage = escapeHTML(chat.message);
+                        contentRender = `<p class="text-[14px] leading-relaxed break-words pr-8 pb-1">${safeMessage}</p>`;
+                    }
 
                     const chatBubble = `
                         <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
-                            <div class="max-w-[75%] rounded-lg px-3 py-1.5 shadow-sm relative ${isMe ? 'bg-[#d9fdd3] text-gray-800 rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}">
+                            <div class="max-w-[80%] rounded-lg px-2.5 py-1.5 shadow-sm relative ${isMe ? 'bg-[#d9fdd3] text-gray-800 rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}">
                                 ${!isMe ? `<p class="text-[11px] font-bold text-emerald-600 mb-0.5">${safeSender}</p>` : ''}
-                                <p class="text-[14px] leading-relaxed break-words pr-8 pb-1">${safeMessage}</p>
+                                ${contentRender}
                                 <span class="text-[9px] text-gray-400 absolute bottom-0.5 right-1.5">${time}</span>
                             </div>
                         </div>
@@ -147,12 +219,9 @@
                     chatBox.innerHTML += chatBubble;
                 });
             }
-            
-            // Scroll otomatis ke bawah
-            setTimeout(() => {
-                chatBox.scrollTop = chatBox.scrollHeight;
-            }, 50);
+            setTimeout(() => { chatBox.scrollTop = chatBox.scrollHeight; }, 50);
         });
     </script>
 </body>
-</html>
+        </html>
+    
