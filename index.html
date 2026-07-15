@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Moogy Chat Room</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* Memastikan tinggi halaman pas dengan layar HP */
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+        /* Custom scrollbar bergaya minimalis */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-slate-100 flex flex-col font-sans text-gray-800">
+
+    <header class="bg-[#075e54] text-white px-4 py-3 flex items-center justify-between shadow-md shrink-0">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 rounded-full bg-emerald-600 flex items-center justify-center font-bold text-lg border border-white">
+                M
+            </div>
+            <div>
+                <h1 class="font-bold text-sm">Grup Workshop Moogy</h1>
+                <p class="text-[10px] text-emerald-200">Online | Komunikasi Karyawan</p>
+            </div>
+        </div>
+        <button onclick="changeUsername()" class="text-[11px] bg-emerald-700 hover:bg-emerald-800 px-2.5 py-1.5 rounded-lg transition">
+            <i class="fas fa-user-edit mr-1"></i> Ganti Nama
+        </button>
+    </header>
+
+    <main id="chat-box" class="flex-1 p-4 overflow-y-auto space-y-4 bg-[#efeae2] relative" style="background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); background-blend-mode: overlay; background-color: #efeae2;">
+        </main>
+
+    <footer class="bg-[#f0f2f5] p-3 flex items-center space-x-2 border-t border-gray-300 shrink-0 pb-safe">
+        <input type="text" id="message-input" placeholder="Ketik pesan..." 
+            class="flex-1 px-4 py-2.5 rounded-full border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#075e54] text-sm"
+            onkeypress="handleKeyPress(event)" autocomplete="off">
+        <button onclick="sendMessage()" class="bg-[#00a884] hover:bg-[#008f72] text-white w-10 h-10 rounded-full flex items-center justify-center transition shadow-md shrink-0">
+            <i class="fas fa-paper-plane text-sm"></i>
+        </button>
+    </footer>
+
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script>
+        // 1. KONFIGURASI FIREBASE (Tetap menggunakan proyek moogy-chat Anda)
+        const firebaseConfig = {
+            apiKey: "AIzaSyCUkSzb_HssqSZKLZR4FcgGwHMB2CfZOSg",
+            authDomain: "moogy-chat.firebaseapp.com",
+            databaseURL: "https://moogy-chat-default-rtdb.firebaseio.com",
+            projectId: "moogy-chat",
+            storageBucket: "moogy-chat.firebasestorage.app",
+            messagingSenderId: "453243113079",
+            appId: "1:453243113079:web:fc16b42cf614a1057f8072",
+            measurementId: "G-XTFKF627B0"
+        };
+
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const chatRef = database.ref('group_chats'); 
+
+        // 2. MANAGEMENT USERNAME
+        let currentUser = localStorage.getItem('chat_username');
+        if (!currentUser) {
+            currentUser = prompt("Masukkan nama Anda untuk bergabung di grup:") || "Karyawan_" + Math.floor(Math.random() * 1000);
+            localStorage.setItem('chat_username', currentUser.trim());
+        }
+
+        function changeUsername() {
+            const newName = prompt("Masukkan nama baru Anda:", currentUser);
+            if (newName && newName.trim() !== "") {
+                currentUser = newName.trim();
+                localStorage.setItem('chat_username', currentUser);
+                alert("Nama berhasil diubah menjadi: " + currentUser);
+            }
+        }
+
+        function escapeHTML(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        // 3. LOGIKA KIRIM PESAN
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const messageText = input.value.trim();
+
+            if (messageText === "") return;
+
+            const messageData = {
+                sender: currentUser,
+                message: messageText,
+                timestamp: Date.now()
+            };
+
+            chatRef.push(messageData)
+                .then(() => {
+                    input.value = ""; 
+                    input.focus();
+                })
+                .catch((error) => {
+                    console.error("Gagal mengirim pesan: ", error);
+                });
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // 4. SINKRONISASI PESAN SECARA REAL-TIME
+        chatRef.on('value', (snapshot) => {
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML = ''; 
+
+            const data = snapshot.val();
+            if (data) {
+                Object.keys(data).forEach((key) => {
+                    const chat = data[key];
+                    const isMe = chat.sender === currentUser;
+                    const time = new Date(chat.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    const safeMessage = escapeHTML(chat.message);
+                    const safeSender = escapeHTML(chat.sender);
+
+                    const chatBubble = `
+                        <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+                            <div class="max-w-[75%] rounded-lg px-3 py-1.5 shadow-sm relative ${isMe ? 'bg-[#d9fdd3] text-gray-800 rounded-tr-none' : 'bg-white text-gray-800 rounded-tl-none'}">
+                                ${!isMe ? `<p class="text-[11px] font-bold text-emerald-600 mb-0.5">${safeSender}</p>` : ''}
+                                <p class="text-[14px] leading-relaxed break-words pr-8 pb-1">${safeMessage}</p>
+                                <span class="text-[9px] text-gray-400 absolute bottom-0.5 right-1.5">${time}</span>
+                            </div>
+                        </div>
+                    `;
+                    chatBox.innerHTML += chatBubble;
+                });
+            }
+            
+            // Scroll otomatis ke bawah
+            setTimeout(() => {
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 50);
+        });
+    </script>
+</body>
+</html>
